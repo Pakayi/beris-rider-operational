@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, setDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, setDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import { Order, Driver, OrderStatus, VehicleType, Expense } from "./types";
 
@@ -15,46 +15,59 @@ export const useBerisStore = () => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Sync Orders secara Real-time
+  // Sync Orders
   useEffect(() => {
-    const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const ordersData = snapshot.docs.map(
-        (doc) =>
-          ({
-            id: doc.id,
-            ...doc.data(),
-          } as Order)
+    try {
+      const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+      const unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+          const ordersData = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Order));
+          setOrders(ordersData);
+          setLoading(false);
+        },
+        (error) => {
+          console.error("Firestore Orders Error:", error);
+          setLoading(false);
+        }
       );
-      setOrders(ordersData);
+      return () => unsubscribe();
+    } catch (e) {
+      console.error("Sync Orders Catch:", e);
       setLoading(false);
-    });
-    return () => unsubscribe();
+    }
   }, []);
 
-  // Sync Drivers secara Real-time
+  // Sync Drivers
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "drivers"), (snapshot) => {
-      if (snapshot.empty) {
-        // Inisialisasi driver jika masih kosong di Firestore
-        INITIAL_DRIVERS.forEach((d) => {
-          setDoc(doc(db, "drivers", d.id), d);
-        });
-      } else {
-        const driversData = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Driver));
-        setDrivers(driversData);
-      }
-    });
+    const unsubscribe = onSnapshot(
+      collection(db, "drivers"),
+      (snapshot) => {
+        if (snapshot.empty) {
+          INITIAL_DRIVERS.forEach((d) => {
+            setDoc(doc(db, "drivers", d.id), d);
+          });
+        } else {
+          const driversData = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Driver));
+          setDrivers(driversData);
+        }
+      },
+      (error) => console.error("Firestore Drivers Error:", error)
+    );
     return () => unsubscribe();
   }, []);
 
-  // Sync Expenses secara Real-time
+  // Sync Expenses
   useEffect(() => {
     const q = query(collection(db, "expenses"), orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const expensesData = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Expense));
-      setExpenses(expensesData);
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const expensesData = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Expense));
+        setExpenses(expensesData);
+      },
+      (error) => console.error("Firestore Expenses Error:", error)
+    );
     return () => unsubscribe();
   }, []);
 
@@ -67,22 +80,27 @@ export const useBerisStore = () => {
       });
     } catch (e) {
       console.error("Error adding order: ", e);
+      alert("Gagal kirim order. Cek koneksi atau izin database bro.");
     }
   };
 
   const updateOrderStatus = async (orderId: string, status: OrderStatus, driverId?: string, proofImage?: string) => {
-    const orderRef = doc(db, "orders", orderId);
-    const updateData: any = { status };
-    if (driverId) updateData.driverId = driverId;
-    if (proofImage) updateData.proofImage = proofImage;
+    try {
+      const orderRef = doc(db, "orders", orderId);
+      const updateData: any = { status };
+      if (driverId) updateData.driverId = driverId;
+      if (proofImage) updateData.proofImage = proofImage;
 
-    await updateDoc(orderRef, updateData);
+      await updateDoc(orderRef, updateData);
 
-    if (driverId) {
-      const driverRef = doc(db, "drivers", driverId);
-      await updateDoc(driverRef, {
-        currentOrderId: status === OrderStatus.COMPLETED || status === OrderStatus.CANCELLED ? null : orderId,
-      });
+      if (driverId) {
+        const driverRef = doc(db, "drivers", driverId);
+        await updateDoc(driverRef, {
+          currentOrderId: status === OrderStatus.COMPLETED || status === OrderStatus.CANCELLED ? null : orderId,
+        });
+      }
+    } catch (e) {
+      console.error("Update status error:", e);
     }
   };
 
@@ -91,17 +109,25 @@ export const useBerisStore = () => {
   };
 
   const toggleDriverStatus = async (driverId: string) => {
-    const driver = drivers.find((d) => d.id === driverId);
-    if (driver) {
-      await updateDoc(doc(db, "drivers", driverId), { isOnline: !driver.isOnline });
+    try {
+      const driver = drivers.find((d) => d.id === driverId);
+      if (driver) {
+        await updateDoc(doc(db, "drivers", driverId), { isOnline: !driver.isOnline });
+      }
+    } catch (e) {
+      console.error("Toggle driver error:", e);
     }
   };
 
   const addExpense = async (expenseData: Omit<Expense, "id" | "createdAt">) => {
-    await addDoc(collection(db, "expenses"), {
-      ...expenseData,
-      createdAt: Date.now(),
-    });
+    try {
+      await addDoc(collection(db, "expenses"), {
+        ...expenseData,
+        createdAt: Date.now(),
+      });
+    } catch (e) {
+      console.error("Add expense error:", e);
+    }
   };
 
   const getStats = () => {
