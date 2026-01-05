@@ -1,13 +1,7 @@
 import { useState, useEffect } from "react";
-import { collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, setDoc } from "firebase/firestore";
+import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy } from "firebase/firestore";
 import { db } from "./firebase";
-import { Order, Driver, OrderStatus, VehicleType, Expense } from "./types";
-
-const INITIAL_DRIVERS: Driver[] = [
-  { id: "d1", name: "Asep Saepul", phone: "08123456789", vehicleType: VehicleType.CAR, vehiclePlate: "Z 1234 AB", isOnline: true },
-  { id: "d2", name: "Dadang Keren", phone: "08198765432", vehicleType: VehicleType.CAR, vehiclePlate: "Z 5678 CD", isOnline: true },
-  { id: "r1", name: "Ujang Racing", phone: "08556677889", vehicleType: VehicleType.MOTORCYCLE, vehiclePlate: "Z 9900 EF", isOnline: true },
-];
+import { Order, Driver, OrderStatus, Expense, VehicleType } from "./types";
 
 export const useBerisStore = () => {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -15,59 +9,37 @@ export const useBerisStore = () => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Sync Orders
   useEffect(() => {
-    try {
-      const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
-      const unsubscribe = onSnapshot(
-        q,
-        (snapshot) => {
-          const ordersData = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Order));
-          setOrders(ordersData);
-          setLoading(false);
-        },
-        (error) => {
-          console.error("Firestore Orders Error:", error);
-          setLoading(false);
-        }
-      );
-      return () => unsubscribe();
-    } catch (e) {
-      console.error("Sync Orders Catch:", e);
-      setLoading(false);
-    }
-  }, []);
-
-  // Sync Drivers
-  useEffect(() => {
+    const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(
-      collection(db, "drivers"),
+      q,
       (snapshot) => {
-        if (snapshot.empty) {
-          INITIAL_DRIVERS.forEach((d) => {
-            setDoc(doc(db, "drivers", d.id), d);
-          });
-        } else {
-          const driversData = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Driver));
-          setDrivers(driversData);
-        }
+        const ordersData = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Order));
+        setOrders(ordersData);
+        setLoading(false);
       },
-      (error) => console.error("Firestore Drivers Error:", error)
+      (error) => {
+        console.error("Firestore Orders Error:", error);
+        setLoading(false);
+      }
     );
     return () => unsubscribe();
   }, []);
 
-  // Sync Expenses
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "drivers"), (snapshot) => {
+      const driversData = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Driver));
+      setDrivers(driversData);
+    });
+    return () => unsubscribe();
+  }, []);
+
   useEffect(() => {
     const q = query(collection(db, "expenses"), orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const expensesData = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Expense));
-        setExpenses(expensesData);
-      },
-      (error) => console.error("Firestore Expenses Error:", error)
-    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const expensesData = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Expense));
+      setExpenses(expensesData);
+    });
     return () => unsubscribe();
   }, []);
 
@@ -79,8 +51,29 @@ export const useBerisStore = () => {
         status: newOrderData.status || OrderStatus.UNVERIFIED,
       });
     } catch (e) {
-      console.error("Error adding order: ", e);
-      alert("Gagal kirim order. Cek koneksi atau izin database bro.");
+      console.error("Error adding order:", e);
+    }
+  };
+
+  const addDriver = async (driverData: { name: string; phone: string; vehicleType: VehicleType; vehiclePlate: string }) => {
+    try {
+      await addDoc(collection(db, "drivers"), {
+        ...driverData,
+        isOnline: false,
+        tripsCount: 0,
+      });
+    } catch (e) {
+      console.error("Error adding driver:", e);
+      alert("Gagal daftar driver. Cek koneksi.");
+    }
+  };
+
+  const deleteDriver = async (driverId: string) => {
+    if (!confirm("Hapus driver ini dari database?")) return;
+    try {
+      await deleteDoc(doc(db, "drivers", driverId));
+    } catch (e) {
+      console.error("Error deleting driver:", e);
     }
   };
 
@@ -109,25 +102,14 @@ export const useBerisStore = () => {
   };
 
   const toggleDriverStatus = async (driverId: string) => {
-    try {
-      const driver = drivers.find((d) => d.id === driverId);
-      if (driver) {
-        await updateDoc(doc(db, "drivers", driverId), { isOnline: !driver.isOnline });
-      }
-    } catch (e) {
-      console.error("Toggle driver error:", e);
+    const driver = drivers.find((d) => d.id === driverId);
+    if (driver) {
+      await updateDoc(doc(db, "drivers", driverId), { isOnline: !driver.isOnline });
     }
   };
 
   const addExpense = async (expenseData: Omit<Expense, "id" | "createdAt">) => {
-    try {
-      await addDoc(collection(db, "expenses"), {
-        ...expenseData,
-        createdAt: Date.now(),
-      });
-    } catch (e) {
-      console.error("Add expense error:", e);
-    }
+    await addDoc(collection(db, "expenses"), { ...expenseData, createdAt: Date.now() });
   };
 
   const getStats = () => {
@@ -135,7 +117,6 @@ export const useBerisStore = () => {
     const revenue = completed.reduce((acc, curr) => acc + curr.price, 0);
     const active = orders.filter((o) => o.status !== OrderStatus.COMPLETED && o.status !== OrderStatus.CANCELLED).length;
     const totalExpenses = expenses.reduce((acc, curr) => acc + curr.amount, 0);
-    const netProfit = revenue - totalExpenses;
 
     const driverStats = drivers.map((d) => {
       const dOrders = completed.filter((o) => o.driverId === d.id);
@@ -154,21 +135,10 @@ export const useBerisStore = () => {
       revenue,
       active,
       totalExpenses,
-      netProfit,
+      netProfit: revenue - totalExpenses,
       driverStats,
     };
   };
 
-  return {
-    orders,
-    drivers,
-    expenses,
-    loading,
-    addOrder,
-    updateOrderStatus,
-    assignDriver,
-    toggleDriverStatus,
-    addExpense,
-    getStats,
-  };
+  return { orders, drivers, expenses, loading, addOrder, addDriver, deleteDriver, updateOrderStatus, assignDriver, toggleDriverStatus, addExpense, getStats };
 };

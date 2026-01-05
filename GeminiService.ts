@@ -1,19 +1,12 @@
 import { GoogleGenAI } from "@google/genai";
 import { Order } from "./types";
 
-// Gunakan pengecekan aman untuk process.env di browser
-const getApiKey = () => {
-  try {
-    return (window as any).process?.env?.API_KEY || "";
-  } catch {
-    return "";
-  }
-};
-
-const ai = new GoogleGenAI({ apiKey: getApiKey() });
+// Fungsi untuk inisialisasi AI setiap dipanggil agar selalu pakai API KEY terbaru dari env
+const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const analyzeOrderForResponse = async (order: Order) => {
   try {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `
@@ -24,9 +17,8 @@ export const analyzeOrderForResponse = async (order: Order) => {
         Tujuan: ${order.destinationLocation}
         Status: ${order.status}
         Harga: Rp ${order.price.toLocaleString("id-ID")}
-        Catatan: ${order.notes || "Tidak ada"}
         
-        Gunakan logat sopan khas Tasikmalaya (Sunda halus).
+        Gunakan logat sopan khas Tasikmalaya (Sunda halus). Contoh: "Wilujeng siang Teh/A..."
       `,
     });
     return response.text;
@@ -36,10 +28,13 @@ export const analyzeOrderForResponse = async (order: Order) => {
 };
 
 export const searchLocationWithAI = async (query: string) => {
+  const ai = getAI();
+
+  // STRATEGI 1: Pakai Gemini 2.5 dengan Google Maps Tool (Paling Akurat jika billing aktif)
   try {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: `Cari lokasi atau tempat populer di Kota Tasikmalaya berdasarkan permintaan ini: "${query}". Berikan nama tempat yang spesifik dan alamat singkatnya saja.`,
+      contents: `Tolong carikan nama tempat yang akurat di Kota/Kabupaten Tasikmalaya untuk input ini: "${query}".`,
       config: {
         tools: [{ googleMaps: {} }],
         toolConfig: {
@@ -54,32 +49,50 @@ export const searchLocationWithAI = async (query: string) => {
     });
 
     const text = response.text || "";
-    const links = (response.candidates?.[0] as any)?.groundingMetadata?.groundingChunks || [];
-    const mapUri = links.find((c: any) => c.maps?.uri)?.maps?.uri;
+    const groundingChunks = (response.candidates?.[0] as any)?.groundingMetadata?.groundingChunks || [];
+    const mapUri = groundingChunks.find((c: any) => c.maps?.uri)?.maps?.uri;
 
-    return {
-      name: text.replace(/[*#]/g, "").split("\n")[0],
-      details: text,
-      mapLink: mapUri,
-    };
-  } catch (error) {
-    console.error("Maps Grounding Error:", error);
-    return null;
+    if (text && text.length > 3) {
+      return {
+        name: text.replace(/[*#]/g, "").split("\n")[0].trim().substring(0, 70),
+        details: text,
+        mapLink: mapUri,
+      };
+    }
+  } catch (e) {
+    console.warn("Maps tool failed/restricted. Switching to Strategy 2...");
   }
+
+  // STRATEGI 2: Fallback ke Gemini 3 Flash (Pencarian Teks berbasis Knowledge AI)
+  try {
+    const fallbackResponse = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `Kamu adalah ahli geografi Tasikmalaya. Sebutkan nama tempat/gedung/jalan yang paling mungkin di Tasikmalaya untuk kata kunci: "${query}". Cukup berikan nama tempatnya saja dalam satu baris.`,
+    });
+    const resultText = fallbackResponse.text?.trim();
+    if (resultText && resultText.length > 2 && !resultText.toLowerCase().includes("maaf")) {
+      return {
+        name: resultText,
+        details: "Lokasi ditemukan via AI Knowledge Base",
+        mapLink: null,
+      };
+    }
+  } catch (err) {
+    console.error("Strategy 2 failed. Using raw query.");
+  }
+
+  return { name: query, details: "Input Manual", mapLink: null };
 };
 
 export const suggestOperationalStrategy = async (orders: Order[]) => {
-  const summary = orders
-    .slice(0, 5)
-    .map((o) => `${o.pickupLocation} -> ${o.destinationLocation}`)
-    .join(", ");
   try {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Analisis data order Tasikmalaya: ${summary}. Berikan 1 tips singkat strategi ojek hari ini.`,
+      contents: `Berikan 1 tips singkat strategi ojek di Tasikmalaya berdasarkan data ini: ${JSON.stringify(orders.slice(0, 10))}`,
     });
     return response.text;
   } catch (e) {
-    return "Fokus di area Asia Plaza dan Unsil saat jam makan siang.";
+    return "Tingkatkan kehadiran di area Unsil dan Asia Plaza saat jam makan siang.";
   }
 };
