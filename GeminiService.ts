@@ -1,8 +1,16 @@
 import { GoogleGenAI } from "@google/genai";
 import { Order } from "./types";
 
-// Inisialisasi AI menggunakan API_KEY dari environment variable
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Gunakan pengecekan aman untuk process.env di browser
+const getApiKey = () => {
+  try {
+    return (window as any).process?.env?.API_KEY || "";
+  } catch {
+    return "";
+  }
+};
+
+const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
 export const analyzeOrderForResponse = async (order: Order) => {
   try {
@@ -29,7 +37,6 @@ export const analyzeOrderForResponse = async (order: Order) => {
 
 export const searchLocationWithAI = async (query: string) => {
   try {
-    // Maps grounding is only supported in Gemini 2.5 series models.
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: `Cari lokasi atau tempat populer di Kota Tasikmalaya berdasarkan permintaan ini: "${query}". Berikan nama tempat yang spesifik dan alamat singkatnya saja.`,
@@ -38,7 +45,7 @@ export const searchLocationWithAI = async (query: string) => {
         toolConfig: {
           retrievalConfig: {
             latLng: {
-              latitude: -7.3274, // Koordinat Pusat Kota Tasikmalaya
+              latitude: -7.3274,
               longitude: 108.2207,
             },
           },
@@ -47,8 +54,8 @@ export const searchLocationWithAI = async (query: string) => {
     });
 
     const text = response.text || "";
-    const links = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    const mapUri = links.find((c) => c.maps?.uri)?.maps?.uri;
+    const links = (response.candidates?.[0] as any)?.groundingMetadata?.groundingChunks || [];
+    const mapUri = links.find((c: any) => c.maps?.uri)?.maps?.uri;
 
     return {
       name: text.replace(/[*#]/g, "").split("\n")[0],

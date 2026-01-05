@@ -3,12 +3,24 @@ import AdminView from "./AdminView";
 import DriverView from "./DriverView";
 import CustomerView from "./CustomerView";
 import OwnerDashboard from "./OwnerDashboard";
+import { useBerisStore } from "./store";
 
 const App: React.FC = () => {
   const [view, setView] = useState<"admin" | "driver" | "customer" | "owner">("customer");
+  const { loading } = useBerisStore();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black text-3xl italic animate-bounce shadow-2xl shadow-blue-200 mb-6">B</div>
+        <h2 className="text-xl font-black text-slate-900 italic tracking-tighter">MENYIAPKAN RADAR...</h2>
+        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2">Menghubungkan ke Beris-Cloud</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col pb-24 md:pb-0">
+    <div className="min-h-screen bg-slate-50 flex flex-col pb-24 md:pb-0 animate-in fade-in duration-700">
       {/* Top Header - Logo Only */}
       <header className="bg-white border-b border-slate-100 px-6 py-4 sticky top-0 z-40 flex justify-between items-center shadow-sm">
         <div className="flex items-center gap-2">
@@ -51,7 +63,7 @@ const App: React.FC = () => {
         </button>
       </nav>
 
-      {/* Desktop Navigation remains sidebar-like or top bar */}
+      {/* Desktop Navigation */}
       <nav className="hidden md:flex fixed left-0 top-20 bottom-0 w-20 bg-white border-r border-slate-100 flex-col items-center py-8 gap-8 z-40">
         <button onClick={() => setView("customer")} className={`p-3 rounded-xl transition-all ${view === "customer" ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "text-slate-300 hover:text-slate-600"}`} title="Pelanggan">
           <i className="fa-solid fa-user text-xl"></i>
