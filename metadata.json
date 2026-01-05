@@ -1,0 +1,8 @@
+{
+  "name": "Beris Rider - Operasional",
+  "description": "Sistem operasi internal untuk startup transportasi lokal Beris Rider di Tasikmalaya. Mengelola order, penugasan driver, dan monitoring status armada secara efisien.",
+  "requestFramePermissions": [
+    "geolocation",
+    "camera"
+  ]
+}
