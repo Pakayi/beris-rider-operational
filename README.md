@@ -1,20 +1,32 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# 🚀 Beris Rider - Operasional Tasikmalaya
 
-# Run and deploy your AI Studio app
+Sistem manajemen ojek lokal cerdas berbasis AI untuk Kota Tasikmalaya.
 
-This contains everything you need to run your app locally.
+## ✨ Fitur Utama
 
-View your app in AI Studio: https://ai.studio/apps/drive/1sujlADNV43yNsllmROZZAdGu-Sd0G7tL
+- **AI Smart Search**: Cari lokasi jemput/tujuan pakai bahasa sehari-hari.
+- **Mobile First UI**: Navigasi bawah ala aplikasi ride-sharing profesional.
+- **Admin Dashboard**: Monitoring armada dan tips operasional berbasis AI.
+- **Driver Hub**: Catat pengeluaran (BBM/Parkir) dan konfirmasi WhatsApp otomatis.
 
-## Run Locally
+## 🛠️ Langkah Deploy ke Vercel
 
-**Prerequisites:**  Node.js
+1. **Push ke GitHub**:
 
+   - `git init`
+   - `git add .`
+   - `git commit -m "deployment"`
+   - `git push origin main`
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+2. **Setup Vercel**:
+   - Import repository di Vercel.
+   - Tambahkan Environment Variable: `API_KEY` (Isi dengan Gemini API Key).
+   - Klik Deploy.
+
+## ⚠️ Catatan Penting
+
+Versi saat ini menggunakan `localStorage`. Data tersimpan secara lokal di browser masing-masing. Untuk penggunaan operasional asli dengan banyak driver, diperlukan integrasi Firebase/Supabase yang akan dilakukan di tahap berikutnya.
+
+---
+
+_Dibuat dengan ❤️ untuk kemajuan transportasi lokal Tasikmalaya._
